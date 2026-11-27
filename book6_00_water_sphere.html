@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>水の球の中のギャスケット</title>
+<style>
+  :root{--bg:#f1eee7;--ink:#2b2b2b;--o:#d9473b;--h:#2f7fd1;--cube:#8a8577;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP","Hiragino Sans",sans-serif;}
+  .wrap{max-width:640px;margin:0 auto;padding:12px;}
+  h1{font-size:18px;margin:4px 0 8px;}
+  canvas{width:100%;height:auto;display:block;background:#fbfaf6;border:1px solid #d8d3c6;border-radius:6px;}
+  .bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+  button{font:inherit;font-size:13px;padding:5px 10px;border:1px solid #b9b2a2;border-radius:5px;background:#fff;cursor:pointer;}
+  button.on{background:#2b2b2b;color:#fff;border-color:#2b2b2b;}
+  .legend{font-size:12px;display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 8px;}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px;}
+  p{font-size:14px;line-height:1.75;margin:6px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>水の球の中のギャスケット</h1>
+  <canvas id="cv" width="640" height="520"></canvas>
+  <div class="bar">
+    <button id="bSphere" class="on">球</button>
+    <button id="bGasket" class="on">ギャスケット</button>
+    <button id="bCube" class="on">立方体</button>
+    <button id="bArm" class="on">腕</button>
+    <button id="bPlay" class="on">回す</button>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--o)"></i>酸素（2段のギャスケット、半径の2乗 12）</span>
+    <span><i style="background:var(--h)"></i>水素（1段のギャスケット、半径の2乗 3）</span>
+  </div>
+  <p>よく見る水の模型は、大きな酸素の球に小さな水素の球が二つ付いた形です。その球の中を透かして見せています。</p>
+  <p>酸素は一辺4の立方体の角を4つ使う正四面体で、2段のギャスケットです。水素はその半分の大きさの1段のギャスケットで、酸素の面の真ん中の三角に乗り、立方体の空いている角に頂点を一つ置きます。</p>
+  <p>水素の球は酸素の球に内側から接し、接する点は立方体の空いた角です。腕は球の中心どうしを結ぶだけで、立方体の対角線の向きになります。どの二つの水素を選んでも、腕の内積は −1、長さの2乗は 3 と 3 で、角は一つに決まります。</p>
+</div>
+<script>
+(function(){
+  const cv=document.getElementById('cv'), g=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  const st={sphere:true,gasket:true,cube:true,arm:true,play:true};
+  // 整数の座標（一辺4の立方体、中心 (2,2,2)）
+  const O=[[0,0,0],[4,4,0],[4,0,4],[0,4,4]];
+  const Hs=[ [[4,2,2],[2,4,2],[2,2,4],[4,4,4]],   // 中心 (3,3,3)
+             [[0,2,2],[2,0,2],[2,2,4],[0,0,4]] ]; // 中心 (1,1,3)
+  const mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2];
+  function cells(v,d){ if(d===0) return [v]; let o=[]; for(let i=0;i<4;i++) o=o.concat(cells([0,1,2,3].map(j=>mid(v[i],v[j])),d-1)); return o; }
+  const Ocells=cells(O,2), Hcells=Hs.map(h=>cells(h,1));
+  const center=v=>[0,1,2].map(k=>(v[0][k]+v[1][k]+v[2][k]+v[3][k])/4);
+  const Oc=[2,2,2], Hc=Hs.map(center);
+  const R_O=Math.sqrt(12), R_H=Math.sqrt(3);   // 表示のための長さ（判定は整数のスクリプト側）
+  const cubeE=[]; const cv8=[];
+  for(let i=0;i<8;i++) cv8.push([(i&1)*4,((i>>1)&1)*4,((i>>2)&1)*4]);
+  for(let i=0;i<8;i++) for(let j=i+1;j<8;j++){ let d=0; for(let k=0;k<3;k++) if(cv8[i][k]!==cv8[j][k]) d++; if(d===1) cubeE.push([cv8[i],cv8[j]]); }
+  let ang=2.356; const tilt=0.30;
+  function P(p){
+    const x=p[0]-2,y=p[1]-2,z=p[2]-2;
+    const ca=Math.cos(ang),sa=Math.sin(ang);
+    let X=x*ca-y*sa, Y=x*sa+y*ca, Z=z;
+    const ct=Math.cos(tilt),stt=Math.sin(tilt);
+    const Y2=Y*ct-Z*stt, Z2=Y*stt+Z*ct;
+    const s=58;
+    return [W/2+X*s, H/2-Z2*s, Y2];
+  }
+  function edges(t){ return [[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]].map(e=>[t[e[0]],t[e[1]]]); }
+  function line(a,b,col,w,al){ const A=P(a),B=P(b); g.globalAlpha=al; g.strokeStyle=col; g.lineWidth=w; g.beginPath(); g.moveTo(A[0],A[1]); g.lineTo(B[0],B[1]); g.stroke(); g.globalAlpha=1; }
+  function tetraFaces(t,col,al){
+    [[0,1,2],[0,1,3],[0,2,3],[1,2,3]].forEach(f=>{
+      const q=f.map(i=>P(t[i])); g.globalAlpha=al; g.fillStyle=col; g.beginPath();
+      g.moveTo(q[0][0],q[0][1]); g.lineTo(q[1][0],q[1][1]); g.lineTo(q[2][0],q[2][1]); g.closePath(); g.fill(); g.globalAlpha=1;
+    });
+  }
+  function sphere(c,r,col){
+    const C=P(c), rr=r*58;
+    const gr=g.createRadialGradient(C[0]-rr*0.35,C[1]-rr*0.35,rr*0.1,C[0],C[1],rr);
+    gr.addColorStop(0,'rgba(255,255,255,0.55)'); gr.addColorStop(1,col);
+    g.globalAlpha=0.28; g.fillStyle=gr; g.beginPath(); g.arc(C[0],C[1],rr,0,Math.PI*2); g.fill();
+    g.globalAlpha=0.6; g.strokeStyle=col; g.lineWidth=1.2; g.stroke(); g.globalAlpha=1;
+  }
+  function dot(p,col,r){ const A=P(p); g.fillStyle=col; g.beginPath(); g.arc(A[0],A[1],r,0,Math.PI*2); g.fill(); }
+  function draw(){
+    g.clearRect(0,0,W,H);
+    if(st.cube) cubeE.forEach(e=>line(e[0],e[1],'#8a8577',1,0.7));
+    if(st.gasket){
+      Ocells.forEach(t=>{ tetraFaces(t,'#d9473b',0.10); edges(t).forEach(e=>line(e[0],e[1],'#b5372d',0.9,0.8)); });
+      Hcells.forEach(cs=>cs.forEach(t=>{ tetraFaces(t,'#2f7fd1',0.14); edges(t).forEach(e=>line(e[0],e[1],'#2566a8',0.9,0.9)); }));
+    }
+    if(st.sphere){
+      // 奥から手前へ
+      const items=[{c:Oc,r:R_O,col:'#d9473b'}].concat(Hc.map(c=>({c,r:R_H,col:'#2f7fd1'})));
+      items.sort((a,b)=>P(b.c)[2]-P(a.c)[2]).forEach(s=>sphere(s.c,s.r,s.col));
+      // 接する点＝立方体の空いた角
+      dot([4,4,4],'#2b2b2b',3); dot([0,0,4],'#2b2b2b',3);
+    }
+    if(st.arm){
+      Hc.forEach(c=>line(Oc,c,'#2b2b2b',2.4,0.95));
+      dot(Oc,'#d9473b',5); Hc.forEach(c=>dot(c,'#2f7fd1',4));
+    }
+  }
+  function loop(){ if(st.play) ang+=0.006; draw(); requestAnimationFrame(loop); }
+  function tog(id,key){ const b=document.getElementById(id); b.onclick=()=>{ st[key]=!st[key]; b.classList.toggle('on',st[key]); }; }
+  tog('bSphere','sphere'); tog('bGasket','gasket'); tog('bCube','cube'); tog('bArm','arm'); tog('bPlay','play');
+  loop();
+})();
+</script>
+</body>
+</html>
