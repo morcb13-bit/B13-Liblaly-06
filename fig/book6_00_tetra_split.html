@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>正四面体を割る</title>
+<style>
+  :root{--bg:#f1eee7;--ink:#2b2b2b;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP","Hiragino Sans",sans-serif;}
+  .wrap{max-width:640px;margin:0 auto;padding:12px;}
+  h1{font-size:18px;margin:4px 0 8px;}
+  canvas{width:100%;height:auto;display:block;background:#fbfaf6;border:1px solid #d8d3c6;border-radius:6px;}
+  .bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center;}
+  button{font:inherit;font-size:13px;padding:5px 10px;border:1px solid #b9b2a2;border-radius:5px;background:#fff;cursor:pointer;}
+  button.on{background:#2b2b2b;color:#fff;border-color:#2b2b2b;}
+  .read{font-size:14px;margin:6px 0;font-variant-numeric:tabular-nums;}
+  p{font-size:14px;line-height:1.75;margin:6px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>正四面体を割る</h1>
+  <canvas id="cv" width="640" height="520"></canvas>
+  <div class="bar">
+    <span style="font-size:13px">辺を</span>
+    <button data-n="1">1</button><button data-n="2">2</button><button data-n="3" class="on">3</button><button data-n="4">4</button><button data-n="5">5</button>
+    <span style="font-size:13px">に割る</span>
+  </div>
+  <div class="bar">
+    <button id="bUp" class="on">上向き</button>
+    <button id="bOct" class="on">正八面体</button>
+    <button id="bDown" class="on">逆向き</button>
+    <button id="bExp" class="on">ばらす</button>
+    <button id="bPlay" class="on">回す</button>
+  </div>
+  <div class="read" id="rd"></div>
+  <p>正四面体の辺を n に割ると、中は上向きの正四面体・正八面体・逆向きの正四面体の三種類で隙間なく埋まります。「ばらす」で、一つひとつを中心から少し離して見せています。</p>
+  <p>正八面体ひとつは小さな正四面体4つ分なので、体積は「上向き＋正八面体×4＋逆向き」で数えられ、いつも n×n×n になります。3に割ったときに、三種類が初めて全部そろいます（上向き10、正八面体4、逆向き1、体積27）。</p>
+</div>
+<script>
+(function(){
+  const cv=document.getElementById('cv'), g=cv.getContext('2d'), W=cv.width, H=cv.height;
+  const st={n:3,up:true,oct:true,down:true,exp:true,play:true};
+  const e1=[1,1,0], e2=[1,0,1], e3=[0,1,1];
+  const lc=(a,b,c)=>[a*e1[0]+b*e2[0]+c*e3[0], a*e1[1]+b*e2[1]+c*e3[1], a*e1[2]+b*e2[2]+c*e3[2]];
+  const cols=['#f25c54','#f7b267','#f4d35e','#8ac926','#2ec4b6','#3a86ff','#8338ec','#ff70a6','#ff9f1c','#06d6a0'];
+  let cells=[];
+  function build(){
+    cells=[]; const n=st.n; let ci=0;
+    for(let a=0;a<n;a++) for(let b=0;a+b<n;b++) for(let c=0;a+b+c<n;c++){
+      const s=a+b+c;
+      if(s<=n-1) cells.push({k:'up',col:cols[(ci++)%10],v:[lc(a,b,c),lc(a+1,b,c),lc(a,b+1,c),lc(a,b,c+1)],
+        f:[[0,1,2],[0,1,3],[0,2,3],[1,2,3]]});
+      if(s<=n-2) cells.push({k:'oct',col:'#c9c3b5',v:[lc(a+1,b,c),lc(a,b+1,c),lc(a,b,c+1),lc(a+1,b+1,c),lc(a+1,b,c+1),lc(a,b+1,c+1)],
+        f:[[0,1,3],[0,2,4],[1,2,5],[3,4,5],[0,3,4],[1,3,5],[2,4,5],[0,1,2].slice(0,0)].filter(x=>x.length)});
+      if(s<=n-3) cells.push({k:'down',col:'#3d3a4b',v:[lc(a+1,b+1,c),lc(a+1,b,c+1),lc(a,b+1,c+1),lc(a+1,b+1,c+1)],
+        f:[[0,1,2],[0,1,3],[0,2,3],[1,2,3]]});
+    }
+    // 正八面体の面：対になる頂点 (0,5)(1,4)(2,3) を除いた三つ組
+    cells.forEach(cl=>{ if(cl.k==='oct'){ const opp=[5,4,3,2,1,0]; const fs=[];
+      for(let i=0;i<6;i++)for(let j=i+1;j<6;j++)for(let k=j+1;k<6;k++){ if(opp[i]!==j&&opp[i]!==k&&opp[j]!==k) fs.push([i,j,k]); }
+      cl.f=fs; }});
+    let up=0,oc=0,dn=0; cells.forEach(c=>{ if(c.k==='up')up++; else if(c.k==='oct')oc++; else dn++; });
+    const vol=up+oc+oc+oc+oc+dn;
+    document.getElementById('rd').textContent=`上向き ${up}　正八面体 ${oc}　逆向き ${dn}　体積 ${up}＋${oc}×4＋${dn}＝${vol}　n×n×n＝${n*n*n}`;
+  }
+  let ang=0.7; const tilt=0.62;
+  function P(p,n){
+    const h=n/2; const x=p[0]-h,y=p[1]-h,z=p[2]-h;
+    const ca=Math.cos(ang),sa=Math.sin(ang);
+    const X=x*ca-y*sa, Y=x*sa+y*ca;
+    const ct=Math.cos(tilt),stt=Math.sin(tilt);
+    const Y2=Y*ct-z*stt, Z2=Y*stt+z*ct;
+    const s=230/n;
+    return [W/2+X*s, H/2-Z2*s, Y2];
+  }
+  function draw(){
+    g.clearRect(0,0,W,H); const n=st.n, h=n/2;
+    const faces=[];
+    cells.forEach(cl=>{
+      if(!st[cl.k==='oct'?'oct':cl.k]) return;
+      let cx=0,cy=0,cz=0; cl.v.forEach(p=>{cx+=p[0];cy+=p[1];cz+=p[2];}); const m=cl.v.length; cx/=m;cy/=m;cz/=m;
+      const k=st.exp?0.35:0; const off=[(cx-h)*k,(cy-h)*k,(cz-h)*k];
+      const vv=cl.v.map(p=>[p[0]+off[0],p[1]+off[1],p[2]+off[2]]);
+      cl.f.forEach(f=>{
+        const q=f.map(i=>P(vv[i],n)); const d=(q[0][2]+q[1][2]+q[2][2])/3;
+        // 面の向きで明るさ
+        const a=vv[f[0]],b=vv[f[1]],c=vv[f[2]];
+        const u=[b[0]-a[0],b[1]-a[1],b[2]-a[2]], w=[c[0]-a[0],c[1]-a[1],c[2]-a[2]];
+        const nn=[u[1]*w[2]-u[2]*w[1],u[2]*w[0]-u[0]*w[2],u[0]*w[1]-u[1]*w[0]];
+        const L=Math.hypot(...nn)||1; const sh=0.55+0.45*Math.abs((nn[0]*0.3+nn[1]*-0.4+nn[2]*0.85)/L);
+        faces.push({q,d,col:cl.col,sh});
+      });
+    });
+    faces.sort((a,b)=>b.d-a.d);
+    faces.forEach(f=>{
+      g.beginPath(); g.moveTo(f.q[0][0],f.q[0][1]); g.lineTo(f.q[1][0],f.q[1][1]); g.lineTo(f.q[2][0],f.q[2][1]); g.closePath();
+      g.fillStyle=f.col; g.globalAlpha=0.92; g.fill();
+      g.globalAlpha=1-f.sh; g.fillStyle='#000'; g.fill(); g.globalAlpha=1;
+      g.strokeStyle='rgba(40,40,40,0.55)'; g.lineWidth=0.8; g.stroke();
+    });
+  }
+  function loop(){ if(st.play) ang+=0.005; draw(); requestAnimationFrame(loop); }
+  document.querySelectorAll('button[data-n]').forEach(b=>b.onclick=()=>{
+    st.n=+b.dataset.n; document.querySelectorAll('button[data-n]').forEach(x=>x.classList.toggle('on',x===b)); build(); });
+  function tog(id,key){ const b=document.getElementById(id); b.onclick=()=>{ st[key]=!st[key]; b.classList.toggle('on',st[key]); }; }
+  tog('bUp','up'); tog('bOct','oct'); tog('bDown','down'); tog('bExp','exp'); tog('bPlay','play');
+  build(); loop();
+})();
+</script>
+</body>
+</html>

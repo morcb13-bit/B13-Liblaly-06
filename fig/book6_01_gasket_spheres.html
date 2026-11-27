@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ギャスケットに外接する球</title>
+<style>
+  :root{--bg:#f1eee7;--ink:#2b2b2b;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP","Hiragino Sans",sans-serif;}
+  .wrap{max-width:640px;margin:0 auto;padding:12px;}
+  h1{font-size:18px;margin:4px 0 8px;}
+  canvas{width:100%;height:auto;display:block;background:#fbfaf6;border:1px solid #d8d3c6;border-radius:6px;}
+  .bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center;}
+  .lab{font-size:13px;}
+  button{font:inherit;font-size:13px;padding:5px 10px;border:1px solid #b9b2a2;border-radius:5px;background:#fff;cursor:pointer;}
+  button.on{background:#2b2b2b;color:#fff;border-color:#2b2b2b;}
+  .read{font-size:14px;margin:6px 0;font-variant-numeric:tabular-nums;}
+  p{font-size:14px;line-height:1.75;margin:6px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ギャスケットに外接する球</h1>
+  <canvas id="cv" width="640" height="520"></canvas>
+  <div class="bar"><span class="lab">ギャスケットの段</span>
+    <button data-k="0">0</button><button data-k="1">1</button><button data-k="2" class="on">2</button><button data-k="3">3</button>
+  </div>
+  <div class="bar"><span class="lab">球をかぶせる段</span>
+    <button data-j="0">0</button><button data-j="1" class="on">1</button><button data-j="2">2</button><button data-j="3">3</button>
+    <button id="bNest" class="on">入れ子</button>
+  </div>
+  <div class="bar">
+    <button id="bTet" class="on">正四面体</button>
+    <button id="bDot" class="on">接する点</button>
+    <button id="bPlay" class="on">回す</button>
+  </div>
+  <div class="read" id="rd"></div>
+  <p>ギャスケットの正四面体の一つひとつに、4つの頂点を通る球（外接球）をかぶせています。「球をかぶせる段」で、全体を囲む一個の球（0）から、小さな正四面体ごとの球（1, 2, 3）まで切り替えられます。</p>
+  <p>「入れ子」にすると、親の球と子の球を重ねて見せます。子の球はどれも親の球に内側から接し、接する点（黒）は親と子が分け合う外側の頂点です。序章の水で、水素の球が酸素の球に内側から接していたのと同じ関係です。</p>
+  <p>兄弟の球どうしは、分け合う頂点（辺の中点）をはさんで重なり合います。重なった球で原子を描くのは、空間充填の模型の描き方です。</p>
+</div>
+<script>
+(function(){
+  const cv=document.getElementById('cv'), g=cv.getContext('2d'), W=cv.width, H=cv.height;
+  const st={k:2,j:1,nest:true,tet:true,dot:true,play:true};
+  const mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2];
+  function cells(v,d,out){ if(d===0){ out.push(v); return; } for(let i=0;i<4;i++) cells([0,1,2,3].map(j=>mid(v[i],v[j])),d-1,out); }
+  const S=8, BIG=[[0,0,0],[S,S,0],[S,0,S],[0,S,S]];
+  const cols=['#d9473b','#3a86ff','#2ec4b6','#f4a259'];
+  let tets=[], spheres=[], dots=[];
+  function build(){
+    if(st.j>st.k) st.j=st.k;
+    document.querySelectorAll('button[data-j]').forEach(b=>{ b.classList.toggle('on',+b.dataset.j===st.j); b.disabled=(+b.dataset.j>st.k); b.style.opacity=b.disabled?0.35:1; });
+    tets=[]; cells(BIG,st.k,tets);
+    spheres=[]; dots=[];
+    const from = st.nest?0:st.j;
+    for(let l=from;l<=st.j;l++){
+      const cs=[]; cells(BIG,l,cs);
+      cs.forEach(t=>{ const c=[0,1,2].map(i=>(t[0][i]+t[1][i]+t[2][i]+t[3][i])/4);
+        const r=Math.hypot(t[0][0]-c[0],t[0][1]-c[1],t[0][2]-c[2]); spheres.push({c,r,l}); });
+      if(st.nest && l>=1){ const ps=[]; cells(BIG,l-1,ps); ps.forEach(p=>p.forEach(v=>dots.push(v))); }
+    }
+    const nOf=l=>{ let n=1; for(let i=0;i<l;i++) n*=4; return n; };
+    document.getElementById('rd').textContent = st.nest
+      ? `球：段0〜${st.j}（${[...Array(st.j+1).keys()].map(nOf).join('＋')} 個）　子の球はすべて親の球に内側から接する`
+      : `球：段${st.j}（${nOf(st.j)} 個）`;
+  }
+  let ang=0.6; const tilt=1.0;
+  function P3(p){
+    const h=S/2; const x=p[0]-h,y=p[1]-h,z=p[2]-h;
+    const ca=Math.cos(ang),sa=Math.sin(ang);
+    const X=x*ca-y*sa, Y=x*sa+y*ca;
+    const ct=Math.cos(tilt),stt=Math.sin(tilt);
+    const Y2=Y*ct-z*stt, Z2=Y*stt+z*ct;
+    const sc=30; return [W/2+X*sc, H/2-Z2*sc, Y2, sc];
+  }
+  function sphere(sp){
+    const q=P3(sp.c), R=sp.r*q[3], col=cols[sp.l%4];
+    const gr=g.createRadialGradient(q[0]-R*0.35,q[1]-R*0.35,R*0.05,q[0],q[1],R);
+    gr.addColorStop(0,'rgba(255,255,255,0.5)'); gr.addColorStop(1,col);
+    g.globalAlpha=sp.l===st.j?0.20:0.10; g.fillStyle=gr; g.beginPath(); g.arc(q[0],q[1],R,0,Math.PI*2); g.fill();
+    g.globalAlpha=0.75; g.strokeStyle=col; g.lineWidth=sp.l===st.j?1.6:1.1; g.stroke(); g.globalAlpha=1;
+  }
+  function draw(){
+    g.clearRect(0,0,W,H);
+    spheres.slice().sort((a,b)=>P3(b.c)[2]-P3(a.c)[2]||a.l-b.l).forEach(sphere);
+    if(st.tet){
+      const fs=[];
+      tets.forEach(t=>{ [[0,1,2],[0,1,3],[0,2,3],[1,2,3]].forEach(f=>{ const q=f.map(i=>P3(t[i])); fs.push({q,d:(q[0][2]+q[1][2]+q[2][2])/3}); }); });
+      fs.sort((a,b)=>b.d-a.d).forEach(f=>{
+        g.beginPath(); g.moveTo(f.q[0][0],f.q[0][1]); g.lineTo(f.q[1][0],f.q[1][1]); g.lineTo(f.q[2][0],f.q[2][1]); g.closePath();
+        g.globalAlpha=0.35; g.fillStyle='#f6c177'; g.fill(); g.globalAlpha=0.9; g.strokeStyle='#a5520f'; g.lineWidth=1.1; g.stroke(); g.globalAlpha=1;
+      });
+    }
+    if(st.dot) dots.forEach(v=>{ const q=P3(v); g.fillStyle='#222'; g.beginPath(); g.arc(q[0],q[1],3.2,0,Math.PI*2); g.fill(); });
+  }
+  function loop(){ if(st.play) ang+=0.005; draw(); requestAnimationFrame(loop); }
+  document.querySelectorAll('button[data-k]').forEach(b=>b.onclick=()=>{ st.k=+b.dataset.k; document.querySelectorAll('button[data-k]').forEach(x=>x.classList.toggle('on',x===b)); build(); });
+  document.querySelectorAll('button[data-j]').forEach(b=>b.onclick=()=>{ if(b.disabled) return; st.j=+b.dataset.j; build(); });
+  function tog(id,k,re){ const b=document.getElementById(id); b.onclick=()=>{ st[k]=!st[k]; b.classList.toggle('on',st[k]); if(re) build(); }; }
+  tog('bNest','nest',true); tog('bTet','tet'); tog('bDot','dot'); tog('bPlay','play');
+  build(); loop();
+})();
+</script>
+</body>
+</html>

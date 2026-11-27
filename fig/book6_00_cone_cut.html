@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>光円錐を切る ── 楕円・放物線・双曲線</title>
+<style>
+  :root{--bg:#f1eee7;--ink:#2b2b2b;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP","Hiragino Sans",sans-serif;}
+  .wrap{max-width:640px;margin:0 auto;padding:12px;}
+  h1{font-size:18px;margin:4px 0 8px;}
+  canvas{width:100%;height:auto;display:block;background:#fbfaf6;border:1px solid #d8d3c6;border-radius:6px;}
+  .bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center;}
+  button{font:inherit;font-size:13px;padding:5px 10px;border:1px solid #b9b2a2;border-radius:5px;background:#fff;cursor:pointer;}
+  button.on{background:#2b2b2b;color:#fff;border-color:#2b2b2b;}
+  input[type=range]{flex:1;min-width:160px;}
+  .read{font-size:15px;margin:6px 0;font-variant-numeric:tabular-nums;}
+  .read b{font-size:17px;}
+  p{font-size:14px;line-height:1.75;margin:6px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>光円錐を切る ── 楕円・放物線・双曲線</h1>
+  <canvas id="cv" width="640" height="520"></canvas>
+  <div class="bar">
+    <button id="bPlay" class="on">傾きを動かす</button>
+    <button id="bRot" class="on">回す</button>
+    <span style="font-size:13px">傾き k／13</span>
+    <input type="range" id="sk" min="0" max="26" step="1" value="0">
+  </div>
+  <div class="read" id="rd"></div>
+  <p>上下に開いた円錐（光円錐）を、平らな面で切ります。面の傾きは k／13 で、k を 0 から 26 まで一つずつ動かします。円錐の側面の傾きは 13／13 です。</p>
+  <p>k が 13 より小さいうちは切り口は閉じた楕円、k が 13 のときだけ放物線、13 を越えると上下の円錐の両方にかかる双曲線になります。どれになるかは、k と 13 の大小を比べるだけで決まります。</p>
+  <p>同じ円錐でも、切る側の傾き（観察者の位置）で形が変わり、放物線はちょうどその境目にあります。</p>
+</div>
+<script>
+(function(){
+  const cv=document.getElementById('cv'), g=cv.getContext('2d'), W=cv.width, H=cv.height;
+  const sk=document.getElementById('sk');
+  let k=0, play=true, rot=true, t=0, dir=1, ang=0.5; const tilt=0.32, Z=3.2, C=0.9;
+  function P(p){
+    const ca=Math.cos(ang),sa=Math.sin(ang);
+    const X=p[0]*ca-p[1]*sa, Y=p[0]*sa+p[1]*ca;
+    const ct=Math.cos(tilt),st=Math.sin(tilt);
+    const Y2=Y*ct-p[2]*st, Z2=Y*st+p[2]*ct;
+    const s=72; return [W/2+X*s, H/2-Z2*s, Y2];
+  }
+  function seg(a,b,col,w,al){ const A=P(a),B=P(b); g.globalAlpha=al; g.strokeStyle=col; g.lineWidth=w; g.beginPath(); g.moveTo(A[0],A[1]); g.lineTo(B[0],B[1]); g.stroke(); g.globalAlpha=1; }
+  function kind(k){ return k<13?'楕円':k===13?'放物線':'双曲線'; }   // 整数の比較だけ
+  function draw(){
+    g.clearRect(0,0,W,H);
+    const s=k/13;
+    // 円錐の母線と輪
+    for(let i=0;i<24;i++){ const th=i*Math.PI/12, c=Math.cos(th), d=Math.sin(th);
+      seg([0,0,0],[Z*c,Z*d,Z],'#8a8577',0.8,0.45); seg([0,0,0],[Z*c,Z*d,-Z],'#8a8577',0.8,0.45); }
+    for(const z of [-Z,-Z/2,Z/2,Z]){ g.globalAlpha=0.5; g.strokeStyle='#8a8577'; g.lineWidth=0.8; g.beginPath();
+      for(let i=0;i<=64;i++){ const th=i*Math.PI/32; const q=P([Math.abs(z)*Math.cos(th),Math.abs(z)*Math.sin(th),z]); if(i) g.lineTo(q[0],q[1]); else g.moveTo(q[0],q[1]); } g.stroke(); g.globalAlpha=1; }
+    // 切る面 z = s x + C（描画の範囲だけ）
+    const R=2.6, corners=[[-R,-R],[R,-R],[R,R],[-R,R]].map(([x,y])=>P([x,y,s*x+C]));
+    g.globalAlpha=0.10; g.fillStyle='#3a86ff'; g.beginPath(); corners.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])); g.closePath(); g.fill();
+    g.globalAlpha=0.5; g.strokeStyle='#3a86ff'; g.lineWidth=1; g.stroke(); g.globalAlpha=1;
+    // 切り口：円錐上の点 (r cosθ, r sinθ, ±r) が面に乗る r を求める
+    const col = k<13?'#2ec4b6':k===13?'#d9473b':'#8338ec';
+    for(const nap of [1,-1]){
+      g.strokeStyle=col; g.lineWidth=3; g.beginPath(); let first=true;
+      for(let i=0;i<=720;i++){
+        const th=i*Math.PI/360, c=Math.cos(th), d=Math.sin(th);
+        const den = nap - s*c;            // nap*r = s r c + C → r = C / (nap - s c)
+        const r = C/den;
+        if(!(r>0) || r>Z*1.02){ first=true; continue; }
+        const q=P([r*c,r*d,nap*r]); if(first){ g.moveTo(q[0],q[1]); first=false; } else g.lineTo(q[0],q[1]);
+      }
+      g.stroke();
+    }
+    document.getElementById('rd').innerHTML=`傾き ${k}／13　→　<b style="color:${col}">${kind(k)}</b>（${k<13?'k＜13':k===13?'k＝13':'k＞13'}）`;
+    sk.value=k;
+  }
+  function loop(){
+    if(rot) ang+=0.004;
+    if(play){ t++; const hold = (k===13)?120:28; if(t>=hold){ t=0; k+=dir; if(k>=26){k=26;dir=-1;} if(k<=0){k=0;dir=1;} } }
+    draw(); requestAnimationFrame(loop);
+  }
+  sk.oninput=()=>{ k=+sk.value; play=false; document.getElementById('bPlay').classList.remove('on'); };
+  document.getElementById('bPlay').onclick=function(){ play=!play; this.classList.toggle('on',play); };
+  document.getElementById('bRot').onclick=function(){ rot=!rot; this.classList.toggle('on',rot); };
+  loop();
+})();
+</script>
+</body>
+</html>

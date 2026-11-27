@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>双曲線の両岸を渡るフィボナッチ</title>
+<style>
+  :root{--bg:#f1eee7;--ink:#2b2b2b;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP","Hiragino Sans",sans-serif;}
+  .wrap{max-width:640px;margin:0 auto;padding:12px;}
+  h1{font-size:18px;margin:4px 0 8px;}
+  canvas{width:100%;height:auto;display:block;background:#fbfaf6;border:1px solid #d8d3c6;border-radius:6px;}
+  .bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+  button{font:inherit;font-size:13px;padding:5px 10px;border:1px solid #b9b2a2;border-radius:5px;background:#fff;cursor:pointer;}
+  button.on{background:#2b2b2b;color:#fff;border-color:#2b2b2b;}
+  .read{font-size:14px;margin:6px 0;font-variant-numeric:tabular-nums;}
+  .legend{font-size:12px;display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 8px;}
+  .legend i{display:inline-block;width:14px;height:3px;margin-right:4px;vertical-align:3px;}
+  p{font-size:14px;line-height:1.75;margin:6px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>双曲線の両岸を渡るフィボナッチ</h1>
+  <canvas id="cv" width="640" height="520"></canvas>
+  <div class="bar">
+    <button id="bPlay" class="on">進める</button>
+    <button id="bReset">0, 1 に戻す</button>
+    <button id="bLucas">負の対照（2, 1 から）</button>
+  </div>
+  <div class="read" id="rd"></div>
+  <div class="legend">
+    <span><i style="background:#d9473b"></i>ノルム ＋1 の岸</span>
+    <span><i style="background:#2f7fd1"></i>ノルム −1 の岸</span>
+    <span><i style="background:#999;height:1px"></i>漸近線 y＝φx</span>
+    <span><i style="background:#3a9d5d"></i>ノルム ±5 の岸（負の対照）</span>
+  </div>
+  <p>整数の組 (x, y) から次の組を (y, x＋y) とします。足し算一回だけの操作です。点は一歩ごとに、ノルム y×y − x×y − x×x が ＋1 の岸と −1 の岸を交互に渡ります。</p>
+  <p>進むほど点は漸近線 y＝φx に寄っていきますが、漸近線の上には整数の点が一つもないので、着地はしません。図は点が遠くへ行くのに合わせて引いていきます。</p>
+  <p>「負の対照」は同じ操作を (2, 1) から始めた列です。こちらはノルム ±5 の岸を渡り、±1 の岸には一度も乗りません。</p>
+</div>
+<script>
+(function(){
+  const cv=document.getElementById('cv'), g=cv.getContext('2d'), W=cv.width, H=cv.height;
+  const PHI=(1+Math.sqrt(5))/2;   // 漸近線を描くためだけの値（判定は整数）
+  let pts=[], lucas=false, play=true, t=0, view=3;
+  function reset(){ pts=[lucas?[2,1]:[0,1]]; view=3; t=0; }
+  const norm=(x,y)=>y*y-x*y-x*x;
+  function toS(x,y){ const s=(W-60)/(view*1.0); return [40+x*s*0.62, H-40-y*s*0.62*0.75]; }
+  function curve(N,col,w){
+    // y^2 - x y - x^2 = N の x≥0 の枝（描画用）
+    g.strokeStyle=col; g.lineWidth=w;
+    for(const sgn of [1,-1]){
+      g.beginPath(); let first=true;
+      for(let i=0;i<=400;i++){
+        const x=view*1.2*i/400; const D=5*x*x+4*N; if(D<0){first=true;continue;}
+        const y=(x+sgn*Math.sqrt(D))/2; if(y<0){first=true;continue;}
+        const p=toS(x,y); if(first){g.moveTo(p[0],p[1]);first=false;} else g.lineTo(p[0],p[1]);
+      }
+      g.stroke();
+    }
+  }
+  function draw(){
+    g.clearRect(0,0,W,H);
+    // 軸
+    g.strokeStyle='#bbb'; g.lineWidth=1; const o=toS(0,0);
+    g.beginPath(); g.moveTo(o[0],o[1]); g.lineTo(W-10,o[1]); g.moveTo(o[0],o[1]); g.lineTo(o[0],10); g.stroke();
+    g.fillStyle='#777'; g.font='12px sans-serif'; g.fillText('x',W-20,o[1]-6); g.fillText('y',o[0]+6,18);
+    // 漸近線
+    g.setLineDash([5,5]); g.strokeStyle='#999'; g.lineWidth=1; g.beginPath(); g.moveTo(o[0],o[1]); const a=toS(view*1.2,view*1.2*PHI); g.lineTo(a[0],a[1]); g.stroke(); g.setLineDash([]);
+    if(lucas){ curve(5,'#3a9d5d',1.6); curve(-5,'#3a9d5d',1.6); }
+    curve(1,'#d9473b',1.8); curve(-1,'#2f7fd1',1.8);
+    // 軌跡
+    g.strokeStyle='rgba(43,43,43,0.5)'; g.lineWidth=1; g.beginPath();
+    pts.forEach((p,i)=>{ const q=toS(p[0],p[1]); if(i===0) g.moveTo(q[0],q[1]); else g.lineTo(q[0],q[1]); }); g.stroke();
+    pts.forEach((p,i)=>{ const q=toS(p[0],p[1]); const N=norm(p[0],p[1]);
+      g.fillStyle = N===1?'#d9473b':N===-1?'#2f7fd1':'#3a9d5d';
+      g.beginPath(); g.arc(q[0],q[1],i===pts.length-1?6:3.5,0,Math.PI*2); g.fill(); });
+    const p=pts[pts.length-1], N=norm(p[0],p[1]);
+    document.getElementById('rd').textContent=`(x, y)＝(${p[0]}, ${p[1]})　ノルム ${N>0?'＋':''}${N}　y／x＝${p[1]}／${p[0]}`;
+  }
+  function loop(){
+    if(play){ t++; if(t%50===0){ const p=pts[pts.length-1]; if(p[1]<150) pts.push([p[1],p[0]+p[1]]); else reset(); } }
+    const p=pts[pts.length-1]; const target=Math.max(3,p[0]*1.25+1); view+= (target-view)*0.04;
+    draw(); requestAnimationFrame(loop);
+  }
+  document.getElementById('bPlay').onclick=function(){ play=!play; this.classList.toggle('on',play); };
+  document.getElementById('bReset').onclick=()=>{ lucas=false; document.getElementById('bLucas').classList.remove('on'); reset(); };
+  document.getElementById('bLucas').onclick=function(){ lucas=!lucas; this.classList.toggle('on',lucas); reset(); };
+  reset(); loop();
+})();
+</script>
+</body>
+</html>
